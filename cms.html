@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Simple CMS Simulation</title>
+  <style>
+    body { font-family: sans-serif; margin: 0; padding: 0; background: #f4f4f4; }
+    header { background: #333; color: #fff; padding: 10px; text-align: center; }
+    main { padding: 20px; max-width: 800px; margin: auto; }
+    .article { background: white; padding: 15px; margin-bottom: 15px; border-radius: 6px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); }
+    .article h2 { margin: 0 0 10px 0; }
+    .article small { color: #888; }
+    .article img { width: 100%; height: 200px; object-fit: cover; border-radius: 4px; margin-bottom: 10px; }
+    .content-preview, .comment-box-content { max-height: 200px; overflow: hidden; position: relative; }
+    .see-more, .see-less { background: none; border: none; color: blue; cursor: pointer; margin-top: 10px; }
+    .comment-box { margin-top: 10px; background: #f9f9f9; padding: 10px; border-radius: 6px; }
+    button, input, textarea, select {
+      margin-top: 10px; padding: 8px; border-radius: 4px; border: 1px solid #ccc;
+      font-size: 1rem;
+    }
+    textarea { width: 100%; height: 100px; }
+    .admin-controls { margin-top: 10px; }
+    .admin-controls button { margin-right: 5px; }
+    .login-box { max-width: 300px; margin: 100px auto; background: white; padding: 20px; border-radius: 6px; }
+    .login-box input { width: 100%; margin-bottom: 10px; }
+    .comment-item { background: #fff; margin-top: 5px; padding: 5px; border-radius: 5px; position: relative; }
+    .comment-delete { position: absolute; right: 10px; top: 5px; background: red; color: #fff; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8rem; }
+    .stars { color: gold; font-size: 1rem; margin-left: 5px; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Simple CMS</h1>
+  </header>
+  <main id="app"></main>
+
+  <script>
+    const isAdmin = location.search.includes("admin");
+    const app = document.getElementById("app");
+    const storageKey = "cms_articles";
+
+    function getArticles() {
+      return JSON.parse(localStorage.getItem(storageKey) || "[]");
+    }
+
+    function saveArticles(articles) {
+      localStorage.setItem(storageKey, JSON.stringify(articles));
+    }
+
+    function renderStars(rating) {
+      return '<span class="stars">' + '★'.repeat(rating) + '☆'.repeat(5 - rating) + '</span>';
+    }
+
+    function renderUserPage() {
+      const articles = getArticles().filter(a => a.published);
+      if (articles.length === 0) {
+        app.innerHTML = "<p>No articles available.</p>";
+        return;
+      }
+
+      app.innerHTML = `<input placeholder="Search..." oninput="filterArticles(this.value)" style="width:100%;" />` +
+        articles.map((article, index) => `
+        <div class="article" data-tags="${(article.tags || []).join(',')}">
+          <h2>${article.title}</h2>
+          <small>By ${article.author}</small>
+          ${article.image ? `<img src="${article.image}" alt="Article Image" />` : ''}
+          <div class="content-preview" id="content-${index}"><p>${article.content}</p></div>
+          <button class="see-more" onclick="toggleContent(${index})">Read More</button>
+          <div><strong>Rate:</strong> <input type="number" min="1" max="5" onchange="rateArticle(${index}, this.value)" /></div>
+          <div class="comment-box">
+            <textarea id="newComment-${index}" placeholder="Leave a comment..."></textarea>
+            <button onclick="submitComment(${index})">Submit Comment</button>
+            <div class="comment-box-content" id="comments-${index}">
+              ${(article.comments || []).map((c, i) => {
+                const [text, rating] = typeof c === 'string' ? [c, 0] : [c.text, c.rating || 0];
+                return `<div class='comment-item'>${text}${rating ? renderStars(rating) : ''}${isAdmin ? ` <button onclick='deleteComment(${index}, ${i})' class='comment-delete'>x</button>` : ''}</div>`;
+              }).join('')}
+            </div>
+            <button class="see-more" onclick="toggleComments(${index})">See More</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function toggleContent(index) {
+      const el = document.getElementById(`content-${index}`);
+      if (el.style.maxHeight === 'none') {
+        el.style.maxHeight = '200px';
+        event.target.textContent = 'Read More';
+      } else {
+        el.style.maxHeight = 'none';
+        event.target.textContent = 'Minimize';
+      }
+    }
+
+    function toggleComments(index) {
+      const el = document.getElementById(`comments-${index}`);
+      if (el.style.maxHeight === 'none') {
+        el.style.maxHeight = '200px';
+        event.target.textContent = 'See More';
+      } else {
+        el.style.maxHeight = 'none';
+        event.target.textContent = 'Minimize';
+      }
+    }
+
+    function rateArticle(index, value) {
+      const articles = getArticles();
+      articles[index].rating = parseInt(value);
+      saveArticles(articles);
+    }
+
+    function submitComment(index) {
+      const textarea = document.getElementById(`newComment-${index}`);
+      const text = textarea.value.trim();
+      if (!text) return;
+      const rating = getArticles()[index].rating || 0;
+      const articles = getArticles();
+      if (!articles[index].comments) articles[index].comments = [];
+      articles[index].comments.push({ text, rating });
+      saveArticles(articles);
+      renderUserPage();
+    }
+
+    function deleteComment(articleIndex, commentIndex) {
+      const articles = getArticles();
+      articles[articleIndex].comments.splice(commentIndex, 1);
+      saveArticles(articles);
+      renderUserPage();
+    }
+
+    function filterArticles(query) {
+      const articles = document.querySelectorAll('.article');
+      query = query.toLowerCase();
+      articles.forEach(a => {
+        const title = a.querySelector('h2').innerText.toLowerCase();
+        const tags = a.dataset.tags.toLowerCase();
+        if (title.includes(query) || tags.includes(query)) {
+          a.style.display = '';
+        } else {
+          a.style.display = 'none';
+        }
+      });
+    }
+
+    function renderLogin() {
+  app.innerHTML = `
+    <div class="login-box">
+      <h2>Admin Login</h2>
+      <input type="text" id="user" placeholder="Username" />
+      <input type="password" id="pass" placeholder="Password" />
+      <button onclick="attemptLogin()">Login</button>
+    </div>
+  `;
+}
+
+function attemptLogin() {
+  const user = document.getElementById("user").value;
+  const pass = document.getElementById("pass").value;
+  if (user === "admin" && pass === "admin123") {
+    localStorage.setItem("cms_logged_in", "true");
+    renderAdminPage();
+  } else {
+    alert("Invalid credentials");
+  }
+}
+
+function renderAdminPage() {
+  if (localStorage.getItem("cms_logged_in") !== "true") {
+    renderLogin();
+    return;
+  }
+
+  const articles = getArticles();
+
+  app.innerHTML = `
+    <h2>Create New Article</h2>
+    <input id="newTitle" placeholder="Title" />
+    <input id="newAuthor" placeholder="Author" />
+    <input id="newImage" placeholder="Image URL or Upload Below" />
+    <input type="file" id="uploadImage" accept="image/*" />
+    <textarea id="newContent" placeholder="Content"></textarea>
+    <input id="newTags" placeholder="Tags (comma separated)" />
+    <button onclick="createArticle()">Publish Article</button>
+    <hr/>
+    <h2>All Articles</h2>
+    <div id="adminArticles">
+      ${articles.map((article, i) => `
+        <div class="article">
+          <h2 contenteditable="true" onblur="editArticle(${i}, 'title', this.innerText)">${article.title}</h2>
+          <small contenteditable="true" onblur="editArticle(${i}, 'author', this.innerText)">By ${article.author}</small>
+          ${article.image ? `<img src="${article.image}" />` : ''}
+          <p contenteditable="true" onblur="editArticle(${i}, 'content', this.innerText)">${article.content}</p>
+          <p contenteditable="true" onblur="editArticle(${i}, 'tags', this.innerText)">${(article.tags || []).join(', ')}</p>
+          <div class="admin-controls">
+            <button onclick="togglePublish(${i})">${article.published ? "Unpublish" : "Publish"}</button>
+            <button onclick="deleteArticle(${i})">Delete</button>
+          </div>
+        </div>
+      `).join("")}
+    </div>
+    <button onclick="logout()">Logout</button>
+  `;
+
+  document.getElementById('uploadImage').addEventListener('change', function (e) {
+    const file = e.target.files[0];
+    const reader = new FileReader();
+    reader.onloadend = function () {
+      document.getElementById('newImage').value = reader.result;
+    }
+    if (file) reader.readAsDataURL(file);
+  });
+}
+
+function createArticle() {
+  const title = document.getElementById("newTitle").value;
+  const author = document.getElementById("newAuthor").value;
+  const content = document.getElementById("newContent").value;
+  const image = document.getElementById("newImage").value;
+  const tags = document.getElementById("newTags").value.split(',').map(t => t.trim());
+
+  if (!title || !author || !content) return alert("All fields required!");
+
+  const articles = getArticles();
+  articles.unshift({ title, author, content, image, published: true, tags, comments: [] });
+  saveArticles(articles);
+  renderAdminPage();
+}
+
+function editArticle(index, field, value) {
+  const articles = getArticles();
+  if (field === 'tags') {
+    articles[index][field] = value.split(',').map(t => t.trim());
+  } else {
+    articles[index][field] = value;
+  }
+  saveArticles(articles);
+}
+
+function deleteArticle(index) {
+  if (!confirm("Delete this article?")) return;
+  const articles = getArticles();
+  articles.splice(index, 1);
+  saveArticles(articles);
+  renderAdminPage();
+}
+
+function togglePublish(index) {
+  const articles = getArticles();
+  articles[index].published = !articles[index].published;
+  saveArticles(articles);
+  renderAdminPage();
+}
+
+function logout() {
+  localStorage.removeItem("cms_logged_in");
+  window.location.href = window.location.origin + window.location.pathname;
+}
+
+// The rest remains the same...
+    if (isAdmin) {
+      renderAdminPage();
+    } else {
+      renderUserPage();
+    }
+  </script>
+</body>
+</html>
