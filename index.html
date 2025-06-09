@@ -28,6 +28,30 @@
     .comment-delete { position: absolute; right: 10px; top: 5px; background: red; color: #fff; border: none; border-radius: 3px; cursor: pointer; font-size: 0.8rem; }
     .stars { color: gold; font-size: 1rem; margin-left: 5px; }
   </style>
+
+  
+  <!-- Firebase SDKs -->
+  <script type="module">
+    import { initializeApp, getApps } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-app.js";
+    import { getFirestore, collection, getDocs, addDoc, setDoc, doc, updateDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBfjMw9Q0eSfrVR7rR6tOTAn8tsoudyBfY",
+      authDomain: "bcp-articles.firebaseapp.com",
+      projectId: "bcp-articles",
+      storageBucket: "bcp-articles.firebasestorage.app",
+      messagingSenderId: "129040301559",
+      appId: "1:129040301559:web:5f02c70b308c56a72982f2",
+      measurementId: "G-76GBLKGEMJ"
+    };
+
+    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+    const db = getFirestore(app);
+
+    window.firebaseCMS = { db, collection, getDocs, addDoc, setDoc, doc, updateDoc, deleteDoc };
+  </script>
+
+
 </head>
 <body>
   <header>
@@ -37,16 +61,12 @@
 
   <script>
     const isAdmin = location.search.includes("admin");
-    const app = document.getElementById("app");
+    const App = document.getElementById("app");
     const storageKey = "cms_articles";
 
-    function getArticles() {
-      return JSON.parse(localStorage.getItem(storageKey) || "[]");
-    }
+    
 
-    function saveArticles(articles) {
-      localStorage.setItem(storageKey, JSON.stringify(articles));
-    }
+    
 
     function renderStars(rating) {
       return '<span class="stars">' + '★'.repeat(rating) + '☆'.repeat(5 - rating) + '</span>';
@@ -55,11 +75,11 @@
     function renderUserPage() {
       const articles = getArticles().filter(a => a.published);
       if (articles.length === 0) {
-        app.innerHTML = "<p>No articles available.</p>";
+        App.innerHTML = "<p>No articles available.</p>";
         return;
       }
 
-      app.innerHTML = `<input placeholder="Search..." oninput="filterArticles(this.value)" style="width:100%;" />` +
+      App.innerHTML = `<input placeholder="Search..." oninput="filterArticles(this.value)" style="width:100%;" />` +
         articles.map((article, index) => `
         <div class="article" data-tags="${(article.tags || []).join(',')}">
           <h2>${article.title}</h2>
@@ -145,7 +165,7 @@
     }
 
     function renderLogin() {
-  app.innerHTML = `
+  App.innerHTML = `
     <div class="login-box">
       <h2>Admin Login</h2>
       <input type="text" id="user" placeholder="Username" />
@@ -174,7 +194,7 @@ function renderAdminPage() {
 
   const articles = getArticles();
 
-  app.innerHTML = `
+  App.innerHTML = `
     <h2>Create New Article</h2>
     <input id="newTitle" placeholder="Title" />
     <input id="newAuthor" placeholder="Author" />
@@ -257,6 +277,29 @@ function logout() {
   localStorage.removeItem("cms_logged_in");
   window.location.href = window.location.origin + window.location.pathname;
 }
+
+
+    async function getArticles() {
+      const { db, collection, getDocs } = window.firebaseCMS;
+      const querySnapshot = await getDocs(collection(db, "articles"));
+      let result = [];
+      querySnapshot.forEach((doc) => {
+        let data = doc.data();
+        data._id = doc.id;
+        result.push(data);
+      });
+      return result;
+    }
+
+    async function saveArticle(id, data) {
+      const { db, doc, setDoc } = window.firebaseCMS;
+      await setDoc(doc(db, "articles", id), data);
+    }
+
+    async function deleteArticleById(id) {
+      const { db, doc, deleteDoc } = window.firebaseCMS;
+      await deleteDoc(doc(db, "articles", id));
+    }
 
 // The rest remains the same...
     if (isAdmin) {
