@@ -45,8 +45,10 @@
       measurementId: "G-76GBLKGEMJ"
     };
 
-    const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
-    const db = getFirestore(app);
+    // =========================================================================================================
+
+    const App = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
+    const db = getFirestore(App);
 
     window.firebaseCMS = { db, collection, getDocs, addDoc, setDoc, doc, updateDoc, deleteDoc };
   </script>
@@ -61,7 +63,7 @@
 
   <script>
     const isAdmin = location.search.includes("admin");
-    const App = document.getElementById("app");
+    const app = document.getElementById("app");
     const storageKey = "cms_articles";
 
     
@@ -75,11 +77,11 @@
     function renderUserPage() {
       const articles = getArticles().filter(a => a.published);
       if (articles.length === 0) {
-        App.innerHTML = "<p>No articles available.</p>";
+        app.innerHTML = "<p>No articles available.</p>";
         return;
       }
 
-      App.innerHTML = `<input placeholder="Search..." oninput="filterArticles(this.value)" style="width:100%;" />` +
+      app.innerHTML = `<input placeholder="Search..." oninput="filterArticles(this.value)" style="width:100%;" />` +
         articles.map((article, index) => `
         <div class="article" data-tags="${(article.tags || []).join(',')}">
           <h2>${article.title}</h2>
@@ -165,7 +167,7 @@
     }
 
     function renderLogin() {
-  App.innerHTML = `
+  app.innerHTML = `
     <div class="login-box">
       <h2>Admin Login</h2>
       <input type="text" id="user" placeholder="Username" />
@@ -194,7 +196,7 @@ function renderAdminPage() {
 
   const articles = getArticles();
 
-  App.innerHTML = `
+  app.innerHTML = `
     <h2>Create New Article</h2>
     <input id="newTitle" placeholder="Title" />
     <input id="newAuthor" placeholder="Author" />
@@ -299,6 +301,69 @@ function logout() {
     async function deleteArticleById(id) {
       const { db, doc, deleteDoc } = window.firebaseCMS;
       await deleteDoc(doc(db, "articles", id));
+    }
+
+
+    async function createArticle() {
+      const title = document.getElementById("newTitle").value;
+      const author = document.getElementById("newAuthor").value;
+      const content = document.getElementById("newContent").value;
+      const image = document.getElementById("newImage").value;
+      const tags = document.getElementById("newTags").value.split(',').map(t => t.trim());
+
+      if (!title || !author || !content) return alert("All fields required!");
+
+      const { db, collection, addDoc } = window.firebaseCMS;
+      await addDoc(collection(db, "articles"), {
+        title, author, content, image, published: true, tags, comments: []
+      });
+
+      renderAdminPage();
+    }
+
+    async function editArticle(id, field, value) {
+      const { db, doc, updateDoc } = window.firebaseCMS;
+      if (field === 'tags') {
+        value = value.split(',').map(t => t.trim());
+      }
+      const update = {};
+      update[field] = value;
+      await updateDoc(doc(db, "articles", id), update);
+    }
+
+    async function deleteArticle(id) {
+      if (!confirm("Delete this article?")) return;
+      await deleteArticleById(id);
+      renderAdminPage();
+    }
+
+    async function togglePublish(id, currentStatus) {
+      const { db, doc, updateDoc } = window.firebaseCMS;
+      await updateDoc(doc(db, "articles", id), { published: !currentStatus });
+      renderAdminPage();
+    }
+
+    async function submitComment(articleId, index) {
+      const textarea = document.getElementById(`newComment-${index}`);
+      const text = textarea.value.trim();
+      if (!text) return;
+
+      const { db, doc, updateDoc, getDocs, collection } = window.firebaseCMS;
+      const snapshot = await getDocs(collection(db, "articles"));
+      let targetDoc;
+      snapshot.forEach(docSnap => {
+        if (docSnap.id === articleId) {
+          targetDoc = docSnap.data();
+        }
+      });
+
+      if (!targetDoc) return;
+
+      const comments = targetDoc.comments || [];
+      comments.push({ text });
+
+      await updateDoc(doc(db, "articles", articleId), { comments });
+      renderUserPage();
     }
 
 // The rest remains the same...
