@@ -45,12 +45,18 @@
       measurementId: "G-76GBLKGEMJ"
     };
 
-    // =========================================================================================================
-
     const App = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];
     const db = getFirestore(App);
 
     window.firebaseCMS = { db, collection, getDocs, addDoc, setDoc, doc, updateDoc, deleteDoc };
+
+    import { getAuth, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.0/firebase-auth.js";
+    const auth = getAuth(App);
+    window.firebaseCMS.auth = auth;
+    window.firebaseCMS.signInWithEmailAndPassword = signInWithEmailAndPassword;
+    window.firebaseCMS.signOut = signOut;
+    window.firebaseCMS.onAuthStateChanged = onAuthStateChanged;
+
   </script>
 
 
@@ -366,12 +372,55 @@ function logout() {
       renderUserPage();
     }
 
-// The rest remains the same...
-    if (isAdmin) {
-      renderAdminPage();
-    } else {
-      renderUserPage();
+
+    function renderLogin() {
+      app.innerHTML = `
+        <div class="login-box">
+          <h2>Firebase Admin Login</h2>
+          <input type="email" id="user" placeholder="Email" />
+          <input type="password" id="pass" placeholder="Password" />
+          <button onclick="attemptLogin()">Login</button>
+        </div>
+      `;
     }
+
+    function attemptLogin() {
+      const email = document.getElementById("user").value;
+      const password = document.getElementById("pass").value;
+      const { signInWithEmailAndPassword, auth } = window.firebaseCMS;
+      signInWithEmailAndPassword(auth, email, password)
+        .then(() => {
+          renderAdminPage();
+        })
+        .catch((error) => {
+          alert("Login failed: " + error.message);
+        });
+    }
+
+    function logout() {
+      const { signOut, auth } = window.firebaseCMS;
+      signOut(auth).then(() => {
+        window.location.reload();
+      });
+    }
+
+    window.onload = () => {
+      const { onAuthStateChanged, auth } = window.firebaseCMS;
+      onAuthStateChanged(auth, (user) => {
+        if (location.search.includes("admin")) {
+          if (user) {
+            renderAdminPage();
+          } else {
+            renderLogin();
+          }
+        } else {
+          renderUserPage();
+        }
+      });
+    };
+
+// The rest remains the same...
+    
   </script>
 </body>
 </html>
